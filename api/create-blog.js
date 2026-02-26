@@ -3,7 +3,11 @@ export default async function handler(req, res) {
     if (req.method !== "POST") {
       return res.status(405).json({ ok: false, error: "Use POST" });
     }
-
+  // 🔐 API Key 驗證
+  const apiKey = req.headers["x-api-key"];
+  if (apiKey !== process.env.API_KEY) {
+    return res.status(401).json({ ok: false, error: "Unauthorized" });
+  }
     const body =
       typeof req.body === "string"
         ? JSON.parse(req.body || "{}")
