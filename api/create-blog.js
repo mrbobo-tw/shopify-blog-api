@@ -35,12 +35,13 @@ export default async function handler(req, res) {
           "X-Shopify-Access-Token": token,
         },
         body: JSON.stringify({
-          article: {
-            title,
-            body_html,
-            published: false
-          }
-        })
+  article: {
+    title,
+    body_html,
+    author: "阿標",
+    published: false
+  }
+})
       }
     );
 
