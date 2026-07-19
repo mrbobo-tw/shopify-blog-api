@@ -30,6 +30,8 @@ export default async function handler(req, res) {
       handle,
       cover_image_url,
       cover_image_alt,
+      article_id,
+      tags,
     } = requestBody;
 
     if (
@@ -70,6 +72,18 @@ export default async function handler(req, res) {
     const cleanHandle = optionalText(handle);
     const cleanCoverUrl = optionalText(cover_image_url);
     const cleanCoverAlt = optionalText(cover_image_alt);
+    const cleanArticleId = optionalText(article_id);
+    const cleanTags = Array.isArray(tags)
+      ? tags
+          .filter((tag) => typeof tag === "string")
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+      : typeof tags === "string"
+        ? tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+        : [];
 
     const articleInput = {
       blogId: graphqlBlogId,
@@ -96,6 +110,10 @@ export default async function handler(req, res) {
       };
     }
 
+    if (cleanTags.length > 0) {
+      articleInput.tags = cleanTags;
+    }
+
     const metafields = [];
 
     if (cleanSeoTitle) {
@@ -120,27 +138,48 @@ export default async function handler(req, res) {
       articleInput.metafields = metafields;
     }
 
-    const query = `
+    const articleFields = `
+      id
+      title
+      handle
+      body
+      summary
+      tags
+      isPublished
+      image {
+        originalSrc
+        altText
+      }
+      metafields(first: 10) {
+        nodes {
+          namespace
+          key
+          value
+        }
+      }
+    `;
+
+    const isUpdate = Boolean(cleanArticleId);
+    const query = isUpdate
+      ? `
+      mutation UpdateArticle($id: ID!, $article: ArticleUpdateInput!) {
+        articleUpdate(id: $id, article: $article) {
+          article {
+            ${articleFields}
+          }
+          userErrors {
+            code
+            field
+            message
+          }
+        }
+      }
+    `
+      : `
       mutation CreateArticle($article: ArticleCreateInput!) {
         articleCreate(article: $article) {
           article {
-            id
-            title
-            handle
-            body
-            summary
-            isPublished
-            image {
-              originalSrc
-              altText
-            }
-            metafields(first: 10) {
-              nodes {
-                namespace
-                key
-                value
-              }
-            }
+            ${articleFields}
           }
           userErrors {
             code
@@ -161,9 +200,14 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           query,
-          variables: {
-            article: articleInput,
-          },
+          variables: isUpdate
+            ? {
+                id: cleanArticleId,
+                article: articleInput,
+              }
+            : {
+                article: articleInput,
+              },
         }),
       }
     );
@@ -178,7 +222,9 @@ export default async function handler(req, res) {
       });
     }
 
-    const payload = result.data?.articleCreate;
+    const payload = isUpdate
+      ? result.data?.articleUpdate
+      : result.data?.articleCreate;
     const userErrors = payload?.userErrors || [];
 
     if (userErrors.length > 0) {
@@ -210,6 +256,7 @@ export default async function handler(req, res) {
         id: article.id,
         title: article.title,
         handle: article.handle,
+        tags: article.tags,
         body_html: article.body,
         summary_html: article.summary,
         cover_image: article.image,
